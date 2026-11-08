@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>老人防摔实时监控系统</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+        }
+        h1 { color: #333; }
+        .status-card {
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-size: 24px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .status-safe { background-color: #e6f7ff; color: #1890ff; border: 2px solid #1890ff; }
+        .status-alarm { background-color: #fff1f0; color: #f5222d; border: 2px solid #f5222d; animation: blink 1s infinite; }
+        .data-row { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #eee; }
+        .data-row:last-child { border-bottom: none; }
+        .label { color: #666; }
+        .value { font-weight: bold; color: #333; }
+        .time { font-size: 12px; color: #999; margin-top: 20px; }
+        
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>👴 老人防摔实时监控</h1>
+        
+        <!-- 状态显示区 -->
+        <div id="statusBox" class="status-card status-safe">
+            🟢 状态安全，监测中...
+        </div>
+
+        <!-- 数据详情区 -->
+        <div class="data-row">
+            <span class="label">当前加速度</span>
+            <span id="magVal" class="value">-- g</span>
+        </div>
+        <div class="data-row">
+            <span class="label">前后倾角 (Roll)</span>
+            <span id="rollVal" class="value">-- °</span>
+        </div>
+        <div class="data-row">
+            <span class="label">左右倾角 (Pitch)</span>
+            <span id="pitchVal" class="value">-- °</span>
+        </div>
+
+        <div class="time" id="updateTime">最后更新: 尚未获取数据</div>
+    </div>
+
+    <script>
+        const UID = "a915974277e8438fa807736d10857441"; 
+        const TOPIC = "sensor004"; 
+
+        // 巴法云 HTTP API 地址
+        const API_URL = `https://apis.bemfa.com/va/getmsg?uid=${UID}&topic=${TOPIC}&type=1`;
+
+        function fetchData() {
+            fetch(API_URL)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.code === 0 && data.data && data.data.length > 0) {
+                        // 获取最新的 1 条消息
+                        let latestMsg = data.data[0].msg;
+                        processData(latestMsg);
+                    }
+                })
+                .catch(error => console.error("获取数据失败:", error));
+        }
+
+        function processData(msg) {
+            const statusBox = document.getElementById("statusBox");
+            const now = new Date().toLocaleTimeString();
+            document.getElementById("updateTime").innerText = "最后更新: " + now;
+
+            // 判断是否报警
+            if (msg.startsWith("ALARM")) {
+                statusBox.className = "status-card status-alarm";
+                statusBox.innerHTML = "🚨 警告：检测到老人摔倒！";
+            } else if (msg.startsWith("CANCEL")) {
+                statusBox.className = "status-card status-safe";
+                statusBox.innerHTML = "🟢 报警已取消，老人安全";
+            } else if (msg.startsWith("NORMAL")) {
+                statusBox.className = "status-card status-safe";
+                statusBox.innerHTML = "🟢 状态安全，监测中...";
+            }
+
+            // 使用正则提取数据
+            // 数据格式类似：NORMAL,mag:1.02g,roll:0.5,pitch:-1.2
+            const magMatch = msg.match(/mag:([\d.-]+)/);
+            const rollMatch = msg.match(/roll:([\d.-]+)/);
+            const pitchMatch = msg.match(/pitch:([\d.-]+)/);
+
+            if (magMatch) document.getElementById("magVal").innerText = magMatch[1] + " g";
+            if (rollMatch) document.getElementById("rollVal").innerText = rollMatch[1] + " °";
+            if (pitchMatch) document.getElementById("pitchVal").innerText = pitchMatch[1] + " °";
+        }
+
+        // 每 2 秒自动刷新一次数据
+        setInterval(fetchData, 2000);
+        fetchData(); // 页面打开时立刻获取一次
+    </script>
+</body>
+</html>
